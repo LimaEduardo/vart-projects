@@ -1,193 +1,168 @@
-// main.cpp - from V-ART template application
-
-// This example shows how to use the Arrow class.
-
-// Changelog
-// Oct 19, 2012 - Bruno de Oliveira Schneider
-// - Removed the unused keyboard handler.
-// - Added more arrows.
-// Sep 25, 2008 - Bruno de Oliveira Schneider
-// - Application created.
+// Esse código é a implementação de uma roda gigante usando o framework V-ART
 
 #include <vart/scene.h>
 #include <vart/light.h>
-#include <vart/arrow.h>
-#include <vart/meshobject.h>
-#include <vart/sphere.h>
-#include <vart/transform.h>
+#include <vart/camera.h>
 #include <vart/contrib/viewerglutogl.h>
-#include <vart/contrib/mousecontrol.h>
+#include <vart/meshobject.h>
 
 #include <iostream>
 #include <cmath>
 
 using namespace std;
 
-// Define the click handler
-class ClickHandlerClass : public VART::MouseControl::ClickHandler
-{
-    public:
-        ClickHandlerClass() {
-        }
-        virtual ~ClickHandlerClass() {};
-        virtual void OnClick() {
-            if (mouseCtrlPtr->LastClickIsDown()) {
-            }
-        }
-};
+// Aqui definimos algumas variáveis que serão usadas em pontos diferentes do código.
 
-// Define idle handler
-class IndleHandlerClass : public VART::ViewerGlutOGL::IdleHandler{
-    public:
-        virtual void OnIdle() {
-            selfWheelRotationRadians += 0.01;
-            selfWheelRotation->MakeXRotation(selfWheelRotationRadians);
-            
-            double angleChair = 0.0;
-            int numberOfChairs = 10;
-            int radius = 70;
-            double angleBetweenChairs = M_PI/5;
-            VART::Transform transform;
-            
-            list<VART::MeshObject*>::iterator it;
-            for (it = chairs.begin(); it != chairs.end(); ++it){
-                transform.MakeTranslation(0, radius * sin(angleChair + selfWheelRotationRadians), -radius * cos(angleChair + selfWheelRotationRadians));
-                // transform.MakeTranslation(0, sin(angleChair + selfWheelRotationRadians) * radius, -cos(angleChair + selfWheelRotationRadians) * radius);
-                (*it)->ApplyTransform(transform);
-                angleChair += angleBetweenChairs;
-            }
-
-            viewerPtr->PostRedisplay();
-        }
-    
-    VART::Transform* selfWheelRotation;
-    list<VART::MeshObject*> chairs;
+// Aqui definimos a quantidade de cadeiras (baseado no modelo que foi oferecido)
+#define NUMBER_OF_CHAIRS 10
+// O angulo das cadeiras deve ser definido em radianos
+// A circunferência da roda é de 2pi. Se queremos dividir a roda em 10 partes,
+// devemos fazer a conta 2pi/10 que é igual a pi/5
+#define ANGLE_BETWEEN_CHAIRS M_PI/5
+// Angulo da roda que foi dado no exercício.
+#define WHEEL_RADIUS 70
 
 
+// Essa classe é extendida de IdleHandler do VART.
+// Ela vai ser responsável por constantemente atualizar a rotação
+// e a translação das cadeiras.
+class IdleHandlerClass : public VART::ViewerGlutOGL::IdleHandler {
+  public:
+    // Essa transformação é responsável pela rotação da roda principal.
+    VART::Transform* wheelRotation;
+    // Este é um vetor com as transformações que serão aplicadas na cadeira.
+    vector<VART::Transform*> chairsTranslation;
 
-    private:
-        float selfWheelRotationRadians;
-        // vector<VART::Transform*> chairsTransform;
-};
+    virtual void OnIdle(){
+      // Esse angulo foi definido de forma geral para evitar redundância, 
+      // visto que a cadeira e a roda devem estar na mesma 'velocidade'
+      angleInRadians += 0.01;
+      // Aplicamos a rotação com o ângulo aumentado
+      wheelRotation->MakeXRotation(angleInRadians);
 
-list<VART::MeshObject*> CreateChairs(VART::MeshObject* chair){
-    list<VART::MeshObject*> chairs;
-    VART::Transform transform;
-
-    int numberOfChairs = 10;
-    int radius = 70;
-    double angleBetweenChairs = M_PI/5;
-
-    double actualAngle = angleBetweenChairs;
-
-    for(int i = 0; i < numberOfChairs; i++){
-        VART::MeshObject* insertedChair = dynamic_cast<VART::MeshObject*> (chair->Copy());
-        transform.MakeTranslation(0, radius * sin(actualAngle), -radius * cos(actualAngle));
-        insertedChair->ApplyTransform(transform);
-        actualAngle += angleBetweenChairs;
-        chairs.push_back(insertedChair);
+      // Aqui cuidaremos da translação da cadeira...
+      angleChair = 0.0;
+      // Para a quantidade de cadeiras definidas, fazemos::
+      for(int i = 0; i < NUMBER_OF_CHAIRS; i++){
+        // Calculamos os pontos Y e Z que iremos fazer a translação
+        double pointY = WHEEL_RADIUS * sin(angleChair + angleInRadians);
+        double pointZ = -WHEEL_RADIUS * cos(angleChair + angleInRadians);
+        // Aplicamos a translação para a transformação na posição atual do vetor.
+        chairsTranslation[i]->MakeTranslation(0, pointY, pointZ);
+        // Aumentamos o angulo da cadeira para aplicar transformação na "próxima cadiera"
+        angleChair += ANGLE_BETWEEN_CHAIRS;
+      }
+      // Atualizamos o display
+      viewerPtr->PostRedisplay();
     }
 
-    transform.MakeTranslation(0, radius * sin(actualAngle), -radius * cos(actualAngle));
-    chair->ApplyTransform(transform);
-    chairs.push_back(chair);
+  private:
+    double angleInRadians;
+    double angleChair;
+};
 
-    return chairs;
+// Essa função é responsável por criar um vector de transformações e aplicar
+// cada transformação a cadiera.
+vector<VART::Transform*> createChairsTransforms(VART::MeshObject* chair){
+  // Cria o vetor de transformações;
+  vector<VART::Transform*> chairTransforms;
+  // Recebe o angulo das cadeiras (para ir para a "primeira cadeira")
+  double actualAngle = ANGLE_BETWEEN_CHAIRS;
+  for(int i = 0; i < NUMBER_OF_CHAIRS; i++){
+    // Cria uma nova transformação
+    VART::Transform* transform = new VART::Transform();
+    transform->MakeTranslation(0, WHEEL_RADIUS * sin(actualAngle), -WHEEL_RADIUS * cos(actualAngle));
+    //Adiciona uma cópia da cadeira como filha de transform;
+    transform->AddChild(*(dynamic_cast<VART::MeshObject*>(chair->Copy())));
+    // Adiciona transform no vetor de transformações
+    chairTransforms.push_back(transform);
+    //"Anda com o angulo para a próxima cadeira"
+    actualAngle += ANGLE_BETWEEN_CHAIRS;
+  }
 
+  return chairTransforms;
 }
 
-// The application itself:
-int main(int argc, char* argv[])
-{
-    VART::ViewerGlutOGL::Init(&argc, argv); // Initialize GLUT
 
-    if (argc < 2){
-        cerr << "No filename given";
-        return 0;
-    }
-    static VART::Scene scene; // create a scene
-    static VART::ViewerGlutOGL viewer; // create a viewer (application window)  
-    // create a camera (scene observer)
-    list <VART::MeshObject*> objects;
-    VART::MeshObject::ReadFromOBJ(argv[1], &objects);
-
-
-    VART::MeshObject* wheel;
-    VART::MeshObject* support;
-    list<VART::MeshObject*> chairs;
-
-    VART::BoundingBox boundingBox;
-
-    list<VART::MeshObject*>::iterator it = objects.begin();
-
-    for(; it != objects.end(); ++it){
-        if((*it)->GetDescription() == "wheel"){
-            wheel = *it;
-        } else if ((*it)->GetDescription() == "support"){
-            support = *it;
-        } else if ((*it)->GetDescription() == "chair"){
-            chairs = CreateChairs(*it);
-        }
-
-        boundingBox = (*it)->GetBoundingBox();
-
-    }
-
-    // VART::Transform wheelScale;
-    // wheelScale.MakeScale(0.01,0.01,0.01);
-    // wheelScale.AddChild(*wheel);
-
-    // VART::Transform supportScale;
-    // supportScale.MakeScale(0.01,0.01,0.01);
-    // supportScale.AddChild(*support);
-
-    VART::Transform wheelRotation;
-    wheelRotation.AddChild(*wheel);
-    
-
-    scene.AddObject(support);
-    scene.AddObject(&wheelRotation);
-
-    it = chairs.begin();
-
-    for(; it != chairs.end(); ++it){
-        scene.AddObject(*it);
-    }
-
-    IndleHandlerClass idleHandler;
-    idleHandler.selfWheelRotation = &wheelRotation;
-    idleHandler.chairs = chairs;
-    // scene.AddObject(chairs);
-    
-    VART::Camera camera(VART::Point4D(200,0,0),VART::Point4D::ORIGIN(),VART::Point4D::Y());
-    camera.SetFarPlaneDistance(300.0f);
-
-    // Create some objects
-    VART::Arrow arrowX(2);
-    VART::Arrow arrowY(VART::Point4D::ORIGIN(), VART::Point4D::Y()*2);
-    VART::Arrow arrowZ(VART::Point4D::ORIGIN(), VART::Point4D::Z()*2);
-
-    // Initialize scene objects
-    arrowX.SetMaterial(VART::Material::PLASTIC_RED());
-    arrowY.SetMaterial(VART::Material::PLASTIC_GREEN());
-    arrowZ.SetMaterial(VART::Material::PLASTIC_BLUE());
-
-    // Build the scene graph
-    scene.AddObject(&arrowX);
-    scene.AddObject(&arrowY);
-    scene.AddObject(&arrowZ);
-
-    // Add lights and cameras to the scene
-    scene.AddLight(VART::Light::BRIGHT_AMBIENT());
-    scene.AddCamera(&camera);
-
-    // Set up the viewer
-    viewer.SetTitle("V-ART arrow example");
-    viewer.SetScene(scene); // attach the scene
-    viewer.SetIdleHandler(&idleHandler);
-
-    // Run application
-    scene.DrawLightsOGL(); // Set OpenGL's lights' state
-    VART::ViewerGlutOGL::MainLoop(); // Enter main loop (event loop) and never return
+int main(int argc, char* argv[]){
+  if (argc < 2){
+    cout << "Missing arguments" << endl;
     return 0;
+  }
+
+  //Iniciar o viewer glut
+  VART::ViewerGlutOGL::Init(&argc,argv);
+  static VART::ViewerGlutOGL viewer;
+
+  // Cria uma lista com os objetos da cena e lê do arquivo.
+  // A lista é composta por uma cadeira, uma roda e um suporte.
+  list<VART::MeshObject*> sceneObjects;
+  VART::MeshObject::ReadFromOBJ(argv[1], &sceneObjects);
+
+  // Criamos um mesh object para cada objeto do arquivo
+  VART::MeshObject* wheel;
+  VART::MeshObject* support;
+  VART::MeshObject* chair;
+
+  // Iterator para percorrer a lista.
+  list<VART::MeshObject*>::iterator it;
+
+  // Verificamos cada item. Pra diferenciar os itens, usamos a função GetDesciption
+  for(it = sceneObjects.begin(); it != sceneObjects.end(); ++it){
+    if ( (*it)->GetDescription() == "support"){
+      support = *it;
+    } else if ( (*it)->GetDescription() == "wheel"){
+      wheel = *it;
+    } else if ( (*it)->GetDescription() == "chair"){
+      chair = *it;
+    }
+  }
+
+  // Vetor que ira receber as transformações e colocar elas "em seu lugar"
+  vector<VART::Transform*> chairTransforms;
+  chairTransforms = createChairsTransforms(chair);
+  
+  // Transformação que vai fazer a roda girar em torno do próprio eixo.
+  VART::Transform wheelRotation;
+  wheelRotation.AddChild(*wheel);
+
+  // Cria uma instancia de idle handler e atribui as transformações
+  // que deverão mudar com o tempo.
+  IdleHandlerClass idleHandler;
+  idleHandler.wheelRotation = &wheelRotation;
+  idleHandler.chairsTranslation = chairTransforms;
+
+  // Instancia a cena.
+  static VART::Scene scene;
+
+  // Adiciona diretamente o suporte. Ele não sofre transformação
+  scene.AddObject(support);
+  // Adicionar a rotação da roda principal.
+  scene.AddObject(&wheelRotation);
+  // Adiciona cada transformação (que já possuí a cadeira como filha) na cena.
+  for (int i = 0; i < NUMBER_OF_CHAIRS; i++){
+    scene.AddObject(chairTransforms[i]);
+  }
+
+  // Adiciona a camera bem longe, pois o objeto é grande (Evita de mexer na escala do objeto)
+  VART::Camera camera(VART::Point4D(200,0,0), VART::Point4D::ORIGIN(), VART::Point4D::Y());
+  // Pra ver mais longe
+  camera.SetFarPlaneDistance(300.0f);
+
+  // Adiciona luz clara.
+  scene.AddLight(VART::Light::BRIGHT_AMBIENT());
+  // Adiciona camera.
+  scene.AddCamera(&camera);
+
+  // Seta title, cena e idle handler para o viewerglut
+  viewer.SetTitle("My new ferris-wheel");
+  viewer.SetScene(scene);
+  viewer.SetIdleHandler(&idleHandler);
+
+  scene.DrawLightsOGL();
+  VART::ViewerGlutOGL::MainLoop();
+
+  return 0;
+
 }
+
